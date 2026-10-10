@@ -57,6 +57,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v5
         with:
           name: PKTool-nds
@@ -64,7 +65,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          NOTES=.github/release-notes/$GITHUB_REF_NAME.md
+          if [ -f "$NOTES" ]; then OPTION="--notes-file $NOTES"; else OPTION="--generate-notes"; fi
           gh release create "$GITHUB_REF_NAME" PKTool.nds \
             --repo "$GITHUB_REPOSITORY" \
             --title "PKTool ${GITHUB_REF_NAME#v}" \
-            --generate-notes
+            $OPTION
