@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  host-tests:
+    name: Host build and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check for duplicate source file names (the DS Makefile needs unique names)
+        run: |
+          dups=$(find core ds -name '*.cpp' -printf '%f\n' | sort | uniq -d)
+          if [ -n "$dups" ]; then echo "Duplicate source names: $dups"; exit 1; fi
+      - name: Configure
+        run: cmake -S . -B build -DPKTOOL_SANITIZE=ON
+      - name: Build
+        run: cmake --build build -j "$(nproc)"
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  nds:
+    name: Nintendo DS build
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build PKTool.nds
+        run: make -j "$(nproc)"
+      - name: Report sizes (ARM9 code + static data vs the 1.5 MiB budget)
+        run: |
+          SIZE=/opt/devkitpro/devkitARM/bin/arm-none-eabi-size
+          $SIZE PKTool.elf
+          {
+            echo "### DS build sizes"
+            echo '```'
+            $SIZE PKTool.elf
+            ls -l PKTool.nds
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload PKTool.nds
+        uses: actions/upload-artifact@v5
+        with:
+          name: PKTool-nds
+          path: PKTool.nds
+          if-no-files-found: error

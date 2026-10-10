@@ -1,0 +1,15 @@
+# Host (CMake) build
+/build/
+/build-*/
+
+# Nintendo DS build
+/build-nds/
+*.elf
+*.nds
+*.map
+
+# Local test saves (never commit real saves)
+/fixtures/local/
+*.sav
+*.sav.bak
+*.sav.tmp
