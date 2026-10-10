@@ -8,6 +8,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/pioacosta/PKTool/releases/latest"><img alt="Download PKTool.nds" src="https://img.shields.io/badge/%E2%AC%87%20Download-PKTool.nds-e3350d?style=for-the-badge"></a>
+</p>
+
+<p align="center">
   <img alt="Games" src="https://img.shields.io/badge/games-Gen%20I%20to%20V-e3350d">
   <img alt="Platform" src="https://img.shields.io/badge/platform-Nintendo%20DS%20%2F%20DSi-1f4b99">
   <img alt="Version" src="https://img.shields.io/badge/version-0.16%20alpha-yellow">
@@ -28,6 +32,14 @@ legal and fix them with one button. It re-implements the relevant parts of
 [PKForge](https://github.com/sofianeelhor/PKForge).
 
 > Not affiliated with Nintendo, Game Freak or The Pokémon Company.
+
+## Download
+
+Get `PKTool.nds` from the **[latest release](https://github.com/pioacosta/PKTool/releases/latest)**
+(Assets → `PKTool.nds`). Copy it to the SD card of your flashcart and start it
+from the flashcart's menu (on a DSi, also through TWiLight Menu++). PKTool
+searches the card for Pokémon `.sav` files, so keep your saves on the same card
+— and everything it writes is backed up first, in `/PKTOOL/backups`.
 
 ## Features
 
