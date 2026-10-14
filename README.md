@@ -100,6 +100,14 @@ searches the card for Pokémon `.sav` files, so keep your saves on the same card
   gifts, generated with each event's own PID/IV method.
 - **Eggs** from the Day-Care, hatching in the game.
 
+**GBA cartridges (beta)**
+- On a DS or DS Lite, SELECT in the save browser backs up the save of a Ruby,
+  Sapphire, Emerald, FireRed or LeafGreen cartridge in the GBA slot to
+  `/PKTOOL/gba/` and opens the copy. Read-only: the cartridge is never written
+  (edits go to the copy), and the copy is only kept if two reads agree and it is
+  a valid save. Not available on the DSi or 3DS (no GBA slot). Beta: not yet
+  tested with a real cartridge.
+
 **Bank and transfers**
 - 20 boxes on the SD card shared by all your saves.
 - Deposit and withdraw from boxes and the party; move Pokémon inside the Bank.
@@ -167,7 +175,7 @@ arrows, the box name, the keyboard and the button hints.
 |---|---|
 | Main menu | Open save · Backups · Bank · Settings · START: exit |
 | Settings | Up/Down: option (option lists, new level, names language, animations on/off, about) · Left/Right (or A): change · L/R: ±10 (level) or next language · A on About: version info · B: back (writes `settings.ini` if something changed) |
-| Save browser | A: open · X: backups of this save · Y: rescan · B: back |
+| Save browser | A: open · X: backups of this save · Y: rescan · SELECT: back up the GBA cartridge (DS/DS Lite, beta) · B: back |
 | Save menu | Up/Down: choose (or tap a row) · A: open · SELECT: write the save · B: close the save (asks first if there are unsaved changes) |
 | Boxes | D-pad: move · L/R: party / boxes · A: slot menu (add on an empty slot) · Y: Bank · START: legality report · SELECT: write the save · tap the box name: rename it · B: back to the save menu |
 | Backups | Up/Down: choose · A: restore · X: back up now · B: back |

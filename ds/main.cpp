@@ -29,6 +29,21 @@ constexpr size_t kScreenBytes = gfx::kScreenWidth * gfx::kScreenHeight * sizeof(
 uint16_t g_topBuffer[gfx::kScreenWidth * gfx::kScreenHeight] __attribute__((aligned(32)));
 uint16_t g_bottomBuffer[gfx::kScreenWidth * gfx::kScreenHeight] __attribute__((aligned(32)));
 
+// The GBA slot (Slot-2) of a DS or DS Lite: cartridge ROM at 0x08000000 (read
+// 16 bits at a time) and the save chip at 0x0A000000 (8-bit bus). Used by the
+// beta, read-only backup of Gen III cartridges (core/saves/gba_cart).
+class GbaSlot final : public saves::gba::Bus {
+public:
+    uint8_t readRom(uint32_t offset) override {
+        const uint16_t word = reinterpret_cast<volatile uint16_t*>(GBAROM)[offset >> 1];
+        return static_cast<uint8_t>((offset & 1) ? word >> 8 : word & 0xFF);
+    }
+    uint8_t readSave(uint16_t offset) override { return reinterpret_cast<volatile uint8_t*>(SRAM)[offset]; }
+    void writeSave(uint16_t offset, uint8_t value) override { reinterpret_cast<volatile uint8_t*>(SRAM)[offset] = value; }
+};
+
+GbaSlot g_gbaSlot;
+
 // The screen fade-in is blended by the 2D engines (free) instead of the CPU:
 // BG3 (the bitmap) over the backdrop, which holds the background colour.
 void applyFade(int alpha) {  // alpha 0-32: weight of the background colour
@@ -120,6 +135,11 @@ int main() {
     config.spriteDirs.push_back("/PKTOOL/sprites");  // fallback: loaders without NitroFS
     config.assetDirs.push_back("/PKTOOL");
     config.hardwareFade = true;
+    if (!isDSiMode()) {  // the DSi and the 3DS have no GBA slot
+        sysSetCartOwner(BUS_OWNER_ARM9);
+        REG_EXMEMCNT = (REG_EXMEMCNT & ~3) | 3;  // slowest save-chip access (18 cycles), safe for flash
+        config.gbaSlot = &g_gbaSlot;
+    }
     BG_PALETTE[0] = ui::detail::kBackground & 0x7FFF;  // backdrop the fade blends towards
     BG_PALETTE_SUB[0] = ui::detail::kBackground & 0x7FFF;
     ui::App app(config);

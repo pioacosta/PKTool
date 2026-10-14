@@ -13,6 +13,7 @@
 #include "core/pokemon/create4.h"
 #include <memory>
 
+#include "core/saves/gba_cart.h"
 #include "core/saves/save_file.h"
 #include "core/saves/save_probe.h"
 #include "core/showdown/showdown.h"
@@ -59,6 +60,9 @@ struct Config {
     // searched in order (default: <dataDir>).
     std::vector<std::string> assetDirs;
     bool storageReady = true;            // FAT/SD initialised
+    // The GBA slot (DS and DS Lite in DS mode), nullptr when there is none. The
+    // browser then offers SELECT: back up the cartridge's save (beta, read-only).
+    saves::gba::Bus* gbaSlot = nullptr;
     // The platform blends the screen fade itself (DS: BLDCNT against the backdrop,
     // see fadeAlpha()); draw() then skips the software blend and fade frames do
     // not force a redraw.
@@ -105,7 +109,7 @@ private:
     // What the Bank screen shows on the bottom screen (bank_ui.cpp).
     enum class BankMode : uint8_t { Browse, Menu, SortKey, Filters, Results };
     enum class Dialog : uint8_t { None, Message, Legality, ConfirmWrite, ConfirmClose, ConfirmDiscard, ConfirmRestore, ConfirmRelease };
-    enum class Pending : uint8_t { None, Scan, Write, Restore, Legalize, Create };
+    enum class Pending : uint8_t { None, Scan, Write, Restore, Legalize, Create, GbaBackup };
     // Lists shown by the picker screen when adding a Pokémon to an empty slot.
     enum class PickerKind : uint8_t { AddMenu, Species, Showdown, Event };
 
@@ -136,6 +140,7 @@ private:
     // Input per screen.
     bool updateHome(const Input& in);
     void updateBrowser(const Input& in);
+    void backUpGbaCartridge();
     void updateSaveMenu(const Input& in);
     void updateBox(const Input& in);
     void updateEdit(const Input& in);

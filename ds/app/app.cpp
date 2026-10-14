@@ -847,6 +847,9 @@ void App::runPending() {
             browserScroll_ = 0;
             screen_ = Screen::Browser;
             break;
+        case Pending::GbaBackup:
+            backUpGbaCartridge();
+            break;
         case Pending::Write: {
             // Bank first (deposits), then the save; withdrawn Pokémon leave the
             // Bank only once the save holding them is on the SD card.
@@ -1085,6 +1088,10 @@ void App::updateBrowser(const Input& in) {
         scanned_ = false;
         startBrowser();
     }
+    if ((in.pressed & kKeySelect) && config_.gbaSlot != nullptr) {
+        pending_ = Pending::GbaBackup;  // runs next frame, after "Reading..." is shown
+        return;
+    }
     if (count == 0) {
         return;
     }
@@ -1092,6 +1099,40 @@ void App::updateBrowser(const Input& in) {
     if (in.pressed & kKeyX) {
         savePath_ = saveFiles_[browserCursor_].path;
         openBackups(Screen::Browser);
+    }
+}
+
+// Beta: copies the save of the Gen III cartridge in the GBA slot to
+// <dataDir>/gba/ and opens it. Read-only for the cartridge; the copy is kept
+// only if two reads agree and it loads as a Gen III save.
+void App::backUpGbaCartridge() {
+    const char* title = "GBA cartridge (beta)";
+    saves::gba::CartInfo info;
+    std::vector<uint8_t> data;
+    const saves::gba::ReadResult read = saves::gba::readSave(*config_.gbaSlot, info, data);
+    if (read != saves::gba::ReadResult::Ok) {
+        showMessage(title, saves::gba::describe(read));
+        return;
+    }
+    saves::LoadResult loaded = saves::LoadResult::UnknownFormat;
+    std::unique_ptr<saves::SaveFile> check = saves::loadSaveFile(data, &loaded);
+    if (!check || loaded != saves::LoadResult::Ok || check->format() != 3) {
+        showMessage(title, std::string(info.gameName) + ":\nthe cartridge has no valid save\n(new game, or a damaged save).\nNothing was written.");
+        return;
+    }
+    check.reset();
+    const std::string dir = io::joinPath(config_.dataDir, "gba");
+    const std::string name = saves::gba::backupFileName(info, io::currentTimestamp());
+    const std::string path = io::joinPath(dir, name);
+    io::WriteResult written = io::makeDirectories(dir) ? io::safeWriteFile(path, data) : io::WriteResult::TempWriteFailed;
+    if (written != io::WriteResult::Ok) {
+        showMessage(title, std::string("Could not write the copy:\n") + io::describe(written));
+        return;
+    }
+    scanned_ = false;  // the next browser visit lists the copy
+    if (openSave(path)) {
+        showMessage(title, std::string(info.gameName) + " backed up to\ngba/" + name +
+                               "\n\nEdits are written to this copy,\nnot to the cartridge.");
     }
 }
 
@@ -2333,6 +2374,7 @@ void App::draw(Canvas& top, Canvas& bottom) {
         const char* text = pending_ == Pending::Scan       ? "Scanning SD card..."
                            : pending_ == Pending::Legalize ? "Legalizing..."
                            : pending_ == Pending::Create   ? "Creating..."
+                           : pending_ == Pending::GbaBackup ? "Reading GBA cartridge..."
                                                            : "Working...";
         bottom.text(kFontSmall, 58, 88, 140, Align::Center, text, kText);
         zones_.clear();
@@ -2906,8 +2948,14 @@ void App::drawBrowser(Canvas& top, Canvas& bottom) {
         bottom.fillRect(246, 19, 2, trackH, kPanelDark);
         bottom.fillRect(246, thumbY, 2, thumbH, kAccent);
     }
-    drawHints(bottom, {{"A", "Open"}, {"B", "Back"}, {"X", "Backups"}, {"Y", "Rescan"}},
-              {kKeyA, kKeyB, kKeyX, kKeyY});
+    if (config_.gbaSlot != nullptr) {
+        // Five hints do not fit: B (back) works as on every screen.
+        drawHints(bottom, {{"A", "Open"}, {"X", "Backups"}, {"Y", "Rescan"}, {"SEL", "GBA"}},
+                  {kKeyA, kKeyX, kKeyY, kKeySelect});
+    } else {
+        drawHints(bottom, {{"A", "Open"}, {"B", "Back"}, {"X", "Backups"}, {"Y", "Rescan"}},
+                  {kKeyA, kKeyB, kKeyX, kKeyY});
+    }
 }
 
 namespace {

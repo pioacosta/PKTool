@@ -71,6 +71,9 @@ WriteResult safeWriteFile(const std::string& path, const std::vector<uint8_t>& d
 WriteResult safeWriteWithBackup(const std::string& path, const std::vector<uint8_t>& data,
                                 const std::string& backupDir, std::string& backupPath);
 
+// Local time as "YYYYMMDD-HHMMSS" (the backups' file name format).
+std::string currentTimestamp();
+
 // Creates `path` and any missing parents. Succeeds if it already exists.
 bool makeDirectories(const std::string& path);
 

@@ -185,6 +185,10 @@ void scan(const std::string& dir, int depthLeft, std::vector<std::string>& out) 
 
 }  // namespace
 
+std::string currentTimestamp() {
+    return timestamp();
+}
+
 const char* describe(WriteResult result) {
     switch (result) {
         case WriteResult::Ok:
