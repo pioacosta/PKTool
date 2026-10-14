@@ -23,8 +23,8 @@ struct Font {
     uint8_t lineHeight;
 };
 
-// Hand-drawn male/female signs for either font (see symbols.cpp); nullptr for
-// any other code point. `*bits` receives the glyph's bitmap.
+// Hand-drawn male/female signs, yen sign and small comma (see symbols.cpp),
+// used instead of the font's glyph; nullptr for any other code point. `*bits` receives the glyph's bitmap.
 const Glyph* symbolGlyph(const Font& font, uint32_t cp, const uint8_t** bits);
 
 extern const Font kFontSmall;  // Jersey 15, 15px: body text

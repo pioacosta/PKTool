@@ -2981,7 +2981,7 @@ void App::drawSaveMenu(Canvas& top, Canvas& bottom) {
     std::snprintf(id, sizeof id, "%05u", t.tid);
     int nameW = top.text(kFontSmall, ix, cy + 32, iw, Align::Left, t.name, kText);
     top.text(kFontSmall, ix + std::min(nameW, iw - 52) + 6, cy + 32, 52, Align::Left, std::string("ID ") + id, kMuted);
-    top.text(kFontSmall, ix, cy + 45, iw, Align::Left, "$ " + groupDigits(t.money), kText);
+    top.text(kFontSmall, ix, cy + 45, iw, Align::Left, "\xC2\xA5" + groupDigits(t.money), kText);
     top.text(kFontSmall, ix, cy + 57, iw, Align::Left,
              std::to_string(t.hours) + ":" + twoDigits(t.minutes) + ":" + twoDigits(t.seconds), kMuted);
     top.text(kFontSmall, ix, cy + 69, iw, Align::Left, io::fileName(savePath_), kDim);

@@ -217,7 +217,7 @@ void App::drawTrainer(Canvas& top, Canvas& bottom) {
     const Row rows[] = {
         {"ID No.", idText(t.tid), t.tid != o.tid, false},
         {"Secret ID", idText(t.sid), t.sid != o.sid, false},
-        {"Money", "$ " + groupDigits(t.money), t.money != o.money, t.money > save_->maxMoney()},
+        {"Money", "\xC2\xA5" + groupDigits(t.money), t.money != o.money, t.money > save_->maxMoney()},
         {"Play time", playTime(t), t.hours != o.hours || t.minutes != o.minutes || t.seconds != o.seconds,
          t.hours > save_->maxPlayHours() || t.minutes > 59 || t.seconds > 59},
     };
