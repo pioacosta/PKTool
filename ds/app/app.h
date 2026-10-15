@@ -69,7 +69,7 @@ struct Config {
     bool hardwareFade = false;
     // Free heap in bytes (DS only; null elsewhere). Shown in the About box.
     size_t (*freeMemory)() = nullptr;
-    std::string version = "1.0.1";
+    std::string version = "1.1.0";
 };
 
 class App {

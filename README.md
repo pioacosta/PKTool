@@ -14,7 +14,7 @@
 <p align="center">
   <img alt="Games" src="https://img.shields.io/badge/games-Gen%20I%20to%20V-e3350d">
   <img alt="Platform" src="https://img.shields.io/badge/platform-Nintendo%20DS%20%2F%20DSi-1f4b99">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.1-green">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.1.0-green">
   <img alt="License" src="https://img.shields.io/badge/license-GPLv3-green">
 </p>
 
