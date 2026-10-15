@@ -292,6 +292,16 @@ selected Pokémon bobs. Settings > Animations turns them off.
 PKTool keeps its files in `/PKTOOL` on the SD card: `backups/`, `bank/bank.pkb`,
 `showdown/`, `events/` and `settings.ini`.
 
+## Support the project
+
+PKTool is a free, non-profit project that I make in my spare time. If you find
+it useful and want to support my work, donations are appreciated — but never
+expected.
+
+<p align="center">
+  <a href="https://ko-fi.com/pioacosta"><img alt="Support me on Ko-fi" src="https://img.shields.io/badge/Ko--fi-Support%20me-ff5e5b?style=for-the-badge&logo=kofi&logoColor=white"></a>
+</p>
+
 ## Building and credits
 
 PKTool is written in C++17. The DS version is built with
