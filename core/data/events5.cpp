@@ -1,5 +1,10 @@
 #include "core/data/events5.h"
 
+#include <cstring>
+
+#include "core/data/card_pack.h"
+#include "core/util/bytes.h"
+
 namespace pktool::data {
 
 int events5Count() { return generated::kEvents5Count; }
@@ -22,6 +27,12 @@ bool canReceiveEvent5(const Event5& card, uint8_t gameVersion) {
 
 EventPeriods eventPeriods(const Event5& card) {
     return {generated::kEventPeriods5 + card.periodFirst, card.periodCount};
+}
+
+bool findWholeCard5(const Event5& card, const std::vector<std::string>& dirs, uint8_t out[kWholePgfSize]) {
+    return findInCardPack(dirs, kCardPack5, "PKG5", kWholePgfSize, [&card](const uint8_t* whole) {
+        return util::readU16(whole + 0xB0) == card.cardId && std::memcmp(whole, card.pgf, sizeof card.pgf) == 0;
+    }, out);
 }
 
 }  // namespace pktool::data

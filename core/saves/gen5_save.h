@@ -77,6 +77,21 @@ public:
     bool writeBoxSlot(int box, int slot, const uint8_t* decrypted) override;
     bool clearBoxSlot(int box, int slot) override;
 
+    // Mystery Gift album (PKHeX MysteryBlock5): 0x100 bytes of received flags
+    // (one per card ID) and 12 PGF slots, encrypted with the LCRNG seeded by
+    // the u32 that follows them. Only Pokémon, item and Entralink cards are
+    // accepted (card type 1-3).
+    static constexpr int kGiftSlots = 12;
+    static constexpr size_t kPgfSize = 0xCC;
+    int giftSlotCount() const override { return kGiftSlots; }
+    size_t giftCardSize() const override { return kPgfSize; }
+    bool readGift(int slot, uint8_t* card) const override;
+    bool giftWaiting(int slot) const override;
+    bool addGift(const uint8_t* card, std::string* error = nullptr) override;
+    bool removeGift(int slot) override;
+    // Whether the album's received flag of a card ID is set.
+    bool giftReceived(uint16_t cardId) const;
+
     void refreshChecksums() override;
     bool checksumsValid() const override;
     bool hasBackup() const { return hasBackup_; }
@@ -84,6 +99,9 @@ public:
 private:
     size_t mainSize() const;
     size_t miscOffset() const;
+    // The album decrypted (0xA90 bytes) and back.
+    std::vector<uint8_t> readMystery() const;
+    void writeMystery(std::vector<uint8_t> album);
 
     std::vector<uint8_t> data_;
     Game game_ = Game::Unknown;

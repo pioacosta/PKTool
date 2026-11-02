@@ -182,17 +182,24 @@ std::unique_ptr<Card> parse(const uint8_t* bytes, size_t size, const std::string
             setStatus(*card, Status::Invalid, "Not a PCD file (size)");
         } else {
             parsePgt(*card, bytes, util::readU16(bytes + 0x150), text::decodeGen4(bytes + 0x104, 36));
+            if (card->status != Status::Invalid) card->whole.assign(bytes, bytes + kPcdSize);
         }
     } else if (ext == ".pgf") {
         if (size != kPgfSize) {
             setStatus(*card, Status::Invalid, "Not a PGF file (size)");
         } else {
             parsePgf(*card, bytes);
+            if (card->status != Status::Invalid) card->whole.assign(bytes, bytes + kPgfSize);
         }
     } else {
         setStatus(*card, Status::Invalid, "Unknown card file type");
     }
     return card;
+}
+
+std::string cardTitle(const uint8_t* card, size_t size, const std::string& fallback) {
+    if (size == kPcdSize) return cleanTitle(text::decodeGen4(card + 0x104, 36), fallback);
+    return cleanTitle(text::decodeGen5(card + 0x60, 36), fallback);
 }
 
 }  // namespace pktool::pokemon::cardfile

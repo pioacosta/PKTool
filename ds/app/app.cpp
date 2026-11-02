@@ -794,6 +794,9 @@ bool App::updateFrame(const Input& rawInput) {
         case Screen::Settings:
             updateSettings(in);
             break;
+        case Screen::Gifts:
+            updateGifts(in);
+            break;
     }
     return true;
 }
@@ -930,6 +933,7 @@ const char* App::screenName() const {
         case Screen::ItemPicker: return "ItemPicker";
         case Screen::Ribbons: return "Ribbons";
         case Screen::Settings: return "Settings";
+        case Screen::Gifts: return "Gifts";
     }
     return "";
 }
@@ -1143,7 +1147,16 @@ void App::backUpGbaCartridge() {
 
 namespace {
 
-enum SaveMenuItem { kSmBoxes, kSmTrainer, kSmBag, kSmBank, kSmSave, kSmBackups, kSmClose, kSmCount };
+enum SaveMenuItem { kSmBoxes, kSmTrainer, kSmBag, kSmGifts, kSmBank, kSmSave, kSmBackups, kSmClose, kSmCount };
+
+// Rows of the save menu: Mystery Gift only for saves with an album.
+std::vector<int> saveMenuItems(const saves::SaveFile& save) {
+    std::vector<int> items;
+    for (int i = 0; i < kSmCount; ++i) {
+        if (i != kSmGifts || save.giftSlotCount() > 0) items.push_back(i);
+    }
+    return items;
+}
 
 }  // namespace
 
@@ -1167,6 +1180,9 @@ void App::runSaveMenuAction(int item) {
         case kSmBag:
             openBag();
             break;
+        case kSmGifts:
+            openGifts();
+            break;
         case kSmBank:
             openBank(false, Screen::SaveMenu);
             break;
@@ -1189,14 +1205,16 @@ void App::runSaveMenuAction(int item) {
 }
 
 void App::updateSaveMenu(const Input& in) {
+    const std::vector<int> items = saveMenuItems(*save_);
+    const int count = static_cast<int>(items.size());
     int zone = in.touched ? touchedZone(in) : -1;
     bool activate = in.pressed & kKeyA;
-    if (zone >= kZoneItem && zone < kZoneItem + kSmCount) {
+    if (zone >= kZoneItem && zone < kZoneItem + count) {
         saveMenuCursor_ = zone - kZoneItem;
         activate = true;
     }
-    if (in.repeated & kKeyUp) saveMenuCursor_ = wrap(saveMenuCursor_ - 1, kSmCount);
-    if (in.repeated & kKeyDown) saveMenuCursor_ = wrap(saveMenuCursor_ + 1, kSmCount);
+    if (in.repeated & kKeyUp) saveMenuCursor_ = wrap(saveMenuCursor_ - 1, count);
+    if (in.repeated & kKeyDown) saveMenuCursor_ = wrap(saveMenuCursor_ + 1, count);
     if (in.pressed & kKeySelect) {
         runSaveMenuAction(kSmSave);
         return;
@@ -1205,7 +1223,7 @@ void App::updateSaveMenu(const Input& in) {
         closeSave();
         return;
     }
-    if (activate) runSaveMenuAction(saveMenuCursor_);
+    if (activate) runSaveMenuAction(items[static_cast<size_t>(clampInt(saveMenuCursor_, 0, count - 1))]);
 }
 
 int App::slotCount() const {
@@ -1896,6 +1914,7 @@ std::string App::eventsDir() const {
 
 void App::openPicker(PickerKind kind) {
     pickerKind_ = kind;
+    if (kind == PickerKind::AddMenu) giftPicking_ = false;  // adding to a box slot
     pickerRows_.clear();
     pickerSpecies_.clear();
     pickerInitials_.clear();
@@ -1960,7 +1979,7 @@ void App::openPicker(PickerKind kind) {
                 for (int i : pokemon::cxd3::menuEntries()) addCard(kColoXdCard + i, data::gc3(i).species);  // Colosseum/XD
             } else {
                 for (int i = 0; i < data::events4Count(); ++i) addCard(i, data::event4(i).species);
-                addCard(kManaphyEggCard, 490);
+                if (!giftPicking_) addCard(kManaphyEggCard, 490);  // made by the game, not a Wonder Card
             }
             std::sort(cards.begin(), cards.end());
             for (const auto& card : cards) {
@@ -2086,7 +2105,10 @@ void App::updatePicker(const Input& in) {
         return;
     }
     if (in.pressed & kKeyB) {
-        if (pickerKind_ == PickerKind::AddMenu) {
+        if (giftPicking_) {
+            giftPicking_ = false;
+            screen_ = Screen::Gifts;
+        } else if (pickerKind_ == PickerKind::AddMenu) {
             screen_ = Screen::Box;
         } else {
             openPicker(PickerKind::AddMenu);
@@ -2105,6 +2127,10 @@ void App::updatePicker(const Input& in) {
     if (pickerKind_ == PickerKind::Event && pickerCursor_ < static_cast<int>(eventNotes_.size()) &&
         !eventNotes_[static_cast<size_t>(pickerCursor_)].empty()) {
         showMessage("Cannot receive", eventNotes_[static_cast<size_t>(pickerCursor_)]);
+        return;
+    }
+    if (giftPicking_) {
+        addGiftFromPicker();
         return;
     }
     pending_ = Pending::Create;  // runs next frame, after "Working..." is shown
@@ -2288,6 +2314,45 @@ const char* App::eventTitle() const {
     return save_->format() >= 5 ? data::event5(card).title : data::event4(card).title;
 }
 
+std::vector<std::string> App::assetDirs() const {
+    return config_.assetDirs.empty() ? std::vector<std::string>{config_.dataDir} : config_.assetDirs;
+}
+
+void App::addGiftFromPicker() {
+    const int card = eventCards_[static_cast<size_t>(pickerCursor_)];
+    std::vector<uint8_t> whole(save_->giftCardSize());
+    const bool gen5 = save_->format() >= 5;
+    if (card >= kFileCardBase) {
+        const pokemon::cardfile::Card& file = *fileCards_[static_cast<size_t>(card - kFileCardBase)];
+        if (file.whole.size() != whole.size()) {
+            showMessage("Cannot add", gen5 ? "Only Gen V cards (.pgf) go in\nthis album."
+                                           : "Only Wonder Cards (.pcd) go in\nthis album: a .pgt file has no card.");
+            return;
+        }
+        whole = file.whole;
+    } else if (gen5 ? !data::findWholeCard5(data::event5(card), assetDirs(), whole.data())
+                    : !data::findWholeCard4(data::event4(card), assetDirs(), whole.data())) {
+        showMessage("Cannot add", std::string("The card was not found in\n") + (gen5 ? data::kCardPack5 : data::kCardPack4) +
+                                      ".");
+        return;
+    }
+    std::string error;
+    if (!save_->addGift(whole.data(), &error)) {
+        showMessage("Cannot add", error);
+        return;
+    }
+    unsaved_ = true;
+    giftPicking_ = false;
+    refreshGifts();
+    // The card went to the first free slot: the last one in use.
+    for (int i = 0; i < static_cast<int>(gifts_.size()); ++i) {
+        if (!gifts_[static_cast<size_t>(i)].card.empty()) giftCursor_ = i;
+    }
+    screen_ = Screen::Gifts;
+    showMessage("Card added", gen5 ? "Write the save with SELECT, then\ntalk to the delivery man in a\nPok\xC3\xA9mon Center in the game."
+                                   : "Write the save with SELECT, then\ntalk to the delivery man in a\nPok\xC3\xA9 Mart in the game.");
+}
+
 void App::startCreatedEdit(const pokemon::Pokemon& p, const uint8_t* raw, const std::string& title,
                            const std::vector<std::string>& changes, const std::vector<std::string>& notes) {
     EditState& e = edit_;
@@ -2366,6 +2431,9 @@ void App::draw(Canvas& top, Canvas& bottom) {
             break;
         case Screen::Settings:
             drawSettings(top, bottom);
+            break;
+        case Screen::Gifts:
+            drawGifts(top, bottom);
             break;
     }
     if (pending_ != Pending::None) {
@@ -2992,6 +3060,13 @@ void drawSaveMenuIcon(Canvas& c, int item, int x, int y, Color ink) {
             c.vline(x + 7, y + 4, 4, ink);
             c.hline(x + 7, y + 7, 3, ink);
             break;
+        case kSmGifts:  // present with a ribbon
+            c.rect(x + 3, y + 6, 8, 6, ink);
+            c.fillRect(x + 2, y + 4, 10, 2, ink);
+            c.vline(x + 7, y + 4, 8, ink);
+            c.pixel(x + 5, y + 3, ink);
+            c.pixel(x + 9, y + 3, ink);
+            break;
         default:  // cross
             for (int i = 0; i < 7; ++i) {
                 c.pixel(x + 4 + i, y + 4 + i, ink);
@@ -3048,7 +3123,9 @@ void App::drawSaveMenu(Canvas& top, Canvas& bottom) {
     // Bottom: the menu.
     bottom.grid(0, 0, gfx::kScreenWidth, kHintTop, kBackground, kGridLine, 12);
     bottom.roundRect(4, 3, 248, 171, kBorder, kPanel);
-    const int rowH = 21;
+    const std::vector<int> items = saveMenuItems(*save_);
+    const int count = static_cast<int>(items.size());
+    const int rowH = count > 7 ? 19 : 21;  // eight rows with the Mystery Gift album
     const int rowGap = 1;
     const int y0 = 6;
     struct Row {
@@ -3062,13 +3139,15 @@ void App::drawSaveMenu(Canvas& top, Canvas& bottom) {
         {"Boxes", "Party and " + boxes, kMuted, kAccent},
         {"Trainer", "Card, money, badges", kMuted, kCursor},
         {"Bag", "Items and quantities", kMuted, kYellow},
+        {"Mystery Gift", "Event cards", kMuted, kFemale},  // Gen IV/V
         {"Bank", "Pok\xC3\xA9mon on the SD", kMuted, kGreen},
         {"Save to SD", unsaved_ ? "Unsaved changes" : "No changes", unsaved_ ? kYellow : kDim,
          unsaved_ ? kYellow : kMuted},
         {"Backups", "Restore or back up", kMuted, kMuted},
         {"Close save", unsaved_ ? "Asks to discard" : "Back to the saves", kMuted, kRed},
     };
-    for (int i = 0; i < kSmCount; ++i) {
+    for (int i = 0; i < count; ++i) {
+        const Row& row = rows[items[static_cast<size_t>(i)]];
         int y = y0 + i * (rowH + rowGap);
         bool selected = i == saveMenuCursor_;
         if (selected) {
@@ -3076,9 +3155,9 @@ void App::drawSaveMenu(Canvas& top, Canvas& bottom) {
         } else {
             bottom.fillRect(9, y, 238, rowH, kPanelDark);
         }
-        drawSaveMenuIcon(bottom, i, 14, y + 3, rows[i].ink);
-        bottom.text(kFontLarge, 34, y + 2, 100, Align::Left, rows[i].label, selected ? kText : kMuted);
-        bottom.text(kFontSmall, 100, y + 5, 142, Align::Right, rows[i].caption, rows[i].captionColor);
+        drawSaveMenuIcon(bottom, items[static_cast<size_t>(i)], 14, y + (rowH - 14) / 2, row.ink);
+        bottom.text(kFontLarge, 34, y + rowH / 2 - 8, 100, Align::Left, row.label, selected ? kText : kMuted);
+        bottom.text(kFontSmall, 100, y + rowH / 2 - 5, 142, Align::Right, row.caption, row.captionColor);
         zones_.push_back({8, y, 240, rowH, kZoneItem + i});
     }
     drawHints(bottom, {{"+", "Choose"}, {"A", "Open"}, {"SEL", "Save"}, {"B", "Close"}},
@@ -3311,7 +3390,7 @@ void App::drawPicker(Canvas& top, Canvas& bottom) {
             emptyText = "No sets found";
             break;
         case PickerKind::Event:
-            heading = save_->format() == 3 ? "EVENTS" : "WONDER CARDS";
+            heading = save_->format() == 3 ? "EVENTS" : giftPicking_ ? "ADD TO THE MYSTERY GIFT ALBUM" : "WONDER CARDS";
             break;
     }
     // Status bar: where the selection comes from, or the target slot.
@@ -3377,7 +3456,10 @@ void App::drawPicker(Canvas& top, Canvas& bottom) {
                        {"B", "Back"}},
                       {kKeyA, kKeyY, 0, kKeyB});
         } else {
-            drawHints(bottom, {{"A", "Create"}, {"LR", pickerInitials_.empty() ? "Page" : "Letter"}, {"B", "Back"}},
+            drawHints(bottom,
+                      {{"A", giftPicking_ ? "Add card" : "Create"},
+                       {"LR", pickerInitials_.empty() ? "Page" : "Letter"},
+                       {"B", "Back"}},
                       {kKeyA, 0, kKeyB});
         }
     }

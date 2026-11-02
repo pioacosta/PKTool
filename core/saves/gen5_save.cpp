@@ -8,6 +8,7 @@
 #include "core/text/gen4_text.h"
 #include "core/util/bytes.h"
 #include "core/util/crc16.h"
+#include "core/util/lcrng.h"
 
 namespace pktool::saves {
 namespace {
@@ -83,6 +84,25 @@ constexpr size_t kBoxNameChars = 10;
 constexpr uint32_t kItemsOffset = 0x18400;
 constexpr uint32_t kMiscOffsetBW = 0x21200;
 constexpr uint32_t kMiscOffsetB2W2 = 0x21100;
+// Mystery Gift album (block 34 in both games): flags, cards, then the seed.
+constexpr uint32_t kMysteryOffset = 0x1C800;
+constexpr size_t kMysterySize = 0xA90;
+constexpr size_t kGiftFlagsSize = 0x100;
+constexpr size_t kGiftCardId = 0xB0;
+constexpr size_t kGiftCardType = 0xB3;  // 1 Pokémon, 2 item, 3 Entralink power
+constexpr size_t kGiftStatus = 0xB4;    // bit 1: already picked up
+
+// Gen IV/V block encryption: each u16 XOR the high half of the next LCRNG state.
+void cryptArray(uint8_t* data, size_t size, uint32_t seed) {
+    for (size_t i = 0; i + 1 < size; i += 2) {
+        seed = util::lcrngNext(seed);
+        writeU16(data + i, readU16(data + i) ^ static_cast<uint16_t>(seed >> 16));
+    }
+}
+
+bool emptyCard(const uint8_t* card) {
+    return std::all_of(card, card + Gen5Save::kPgfSize, [](uint8_t b) { return b == 0; });
+}
 
 // The checksum block (last block) doubles as the file footer.
 bool footerValid(const std::vector<uint8_t>& data, const Block* blocks, int count) {
@@ -265,6 +285,72 @@ bool Gen5Save::writeBoxSlot(int box, int slot, const uint8_t* decrypted) {
 bool Gen5Save::clearBoxSlot(int box, int slot) {
     if (box < 0 || box >= kBoxCount || slot < 0 || slot >= kSlotsPerBox) return false;
     std::memset(data_.data() + kBoxOffset + box * kBoxStride + slot * pk5::kStoredSize, 0, pk5::kStoredSize);
+    return true;
+}
+
+std::vector<uint8_t> Gen5Save::readMystery() const {
+    std::vector<uint8_t> album(data_.begin() + kMysteryOffset, data_.begin() + kMysteryOffset + kMysterySize);
+    const uint32_t seed = util::readU32(data_.data() + kMysteryOffset + kMysterySize);
+    // A block never written (all zero, seed included) is an empty album, not noise.
+    if (seed == 0 && std::all_of(album.begin(), album.end(), [](uint8_t b) { return b == 0; })) return album;
+    cryptArray(album.data(), album.size(), seed);
+    return album;
+}
+
+void Gen5Save::writeMystery(std::vector<uint8_t> album) {
+    // The seed stays: the game picks a new one when it saves.
+    cryptArray(album.data(), album.size(), util::readU32(data_.data() + kMysteryOffset + kMysterySize));
+    std::copy(album.begin(), album.end(), data_.begin() + kMysteryOffset);
+}
+
+bool Gen5Save::readGift(int slot, uint8_t* card) const {
+    if (slot < 0 || slot >= kGiftSlots) return false;
+    const std::vector<uint8_t> album = readMystery();
+    const uint8_t* src = album.data() + kGiftFlagsSize + slot * kPgfSize;
+    if (emptyCard(src)) return false;
+    std::memcpy(card, src, kPgfSize);
+    return true;
+}
+
+bool Gen5Save::giftWaiting(int slot) const {
+    uint8_t card[kPgfSize];
+    return readGift(slot, card) && (card[kGiftStatus] & 2) == 0;
+}
+
+bool Gen5Save::giftReceived(uint16_t cardId) const {
+    if (cardId >= kGiftFlagsSize * 8) return false;
+    return (readMystery()[cardId >> 3] >> (cardId & 7)) & 1;
+}
+
+bool Gen5Save::addGift(const uint8_t* card, std::string* error) {
+    auto fail = [error](const char* reason) {
+        if (error) *error = reason;
+        return false;
+    };
+    if (card[kGiftCardType] < 1 || card[kGiftCardType] > 3) return fail("Not a Wonder Card");
+    std::vector<uint8_t> album = readMystery();
+    int slot = 0;
+    while (slot < kGiftSlots && !emptyCard(album.data() + kGiftFlagsSize + slot * kPgfSize)) ++slot;
+    if (slot == kGiftSlots) return fail("The Mystery Gift album is full");
+    uint8_t* dst = album.data() + kGiftFlagsSize + slot * kPgfSize;
+    std::memcpy(dst, card, kPgfSize);
+    dst[kGiftStatus] &= static_cast<uint8_t>(~2);  // not picked up yet
+    // The game sets the card's received flag when it downloads the card.
+    const uint16_t cardId = readU16(card + kGiftCardId);
+    if (cardId < kGiftFlagsSize * 8) album[cardId >> 3] |= static_cast<uint8_t>(1 << (cardId & 7));
+    writeMystery(std::move(album));
+    return true;
+}
+
+bool Gen5Save::removeGift(int slot) {
+    if (slot < 0 || slot >= kGiftSlots) return false;
+    std::vector<uint8_t> album = readMystery();
+    uint8_t* cards = album.data() + kGiftFlagsSize;
+    if (emptyCard(cards + slot * kPgfSize)) return false;
+    // The album has no gaps: the following cards move up.
+    std::memmove(cards + slot * kPgfSize, cards + (slot + 1) * kPgfSize, (kGiftSlots - slot - 1) * kPgfSize);
+    std::memset(cards + (kGiftSlots - 1) * kPgfSize, 0, kPgfSize);
+    writeMystery(std::move(album));
     return true;
 }
 

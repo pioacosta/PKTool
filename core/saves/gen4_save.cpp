@@ -412,6 +412,170 @@ bool Gen4Save::clearBoxSlot(int box, int slot) {
     return true;
 }
 
+namespace {
+
+// Mystery Gift block in the general block (PKHeX SAV4DP/Pt/HGSS OffsetMystery).
+constexpr size_t kMysteryDp = 0xA6D0;
+constexpr size_t kMysteryPt = 0xB4C0;
+constexpr size_t kMysteryHgss = 0x9D3C;
+constexpr size_t kGiftFlagsSize = 0x100;
+constexpr int kDeliveryManFlag = 2047;
+constexpr int kDpSentinels = 11;
+constexpr uint32_t kDpSlotActive = 0xEDB88320;
+constexpr size_t kUnlockOffset = 72;  // general block: bit 0 = Mystery Gift in the main menu
+constexpr size_t kPgtSlot = 0x02;     // the album card a gift came from
+constexpr size_t kPcdCardId = 0x150;
+constexpr uint16_t kGiftPokemon = 1;
+constexpr uint16_t kGiftEgg = 2;
+constexpr uint16_t kGiftTypeMax = 15;
+constexpr uint16_t kMaxSpecies4 = 493;
+
+bool allZero(const uint8_t* data, size_t size) {
+    return std::all_of(data, data + size, [](uint8_t b) { return b == 0; });
+}
+
+// A gift and the PGT part of a card are the same gift whatever their slot byte.
+bool sameGift(const uint8_t* pgt, const uint8_t* pcd) {
+    return std::memcmp(pgt, pcd, kPgtSlot) == 0 &&
+           std::memcmp(pgt + kPgtSlot + 1, pcd + kPgtSlot + 1, Gen4Save::kPgtSize - kPgtSlot - 1) == 0;
+}
+
+}  // namespace
+
+uint8_t* Gen4Save::mystery() {
+    return general() + (layout_->game == Game::DiamondPearl ? kMysteryDp
+                        : layout_->game == Game::Platinum   ? kMysteryPt
+                                                            : kMysteryHgss);
+}
+
+const uint8_t* Gen4Save::mystery() const {
+    return const_cast<Gen4Save*>(this)->mystery();
+}
+
+size_t Gen4Save::pgtOffset(int index) const {
+    const size_t cards = kGiftFlagsSize + (layout_->game == Game::DiamondPearl ? kDpSentinels * 4 : 0);
+    return cards + index * kPgtSize;
+}
+
+size_t Gen4Save::pcdOffset(int index) const {
+    return pgtOffset(kGiftPgts) + index * kPcdSize;
+}
+
+bool Gen4Save::readGift(int slot, uint8_t* card) const {
+    if (slot < 0 || slot >= kGiftCards) return false;
+    const uint8_t* src = mystery() + pcdOffset(slot);
+    if (allZero(src, kPcdSize)) return false;
+    std::memcpy(card, src, kPcdSize);
+    return true;
+}
+
+int Gen4Save::giftFor(int card) const {
+    const uint8_t* pcd = mystery() + pcdOffset(card);
+    if (allZero(pcd, kPcdSize)) return -1;
+    for (int i = 0; i < kGiftPgts; ++i) {
+        const uint8_t* pgt = mystery() + pgtOffset(i);
+        if (!allZero(pgt, kPgtSize) && sameGift(pgt, pcd)) return i;
+    }
+    return -1;
+}
+
+bool Gen4Save::giftWaiting(int slot) const {
+    return slot >= 0 && slot < kGiftCards && giftFor(slot) >= 0;
+}
+
+bool Gen4Save::giftReceived(uint16_t cardId) const {
+    return cardId < kDeliveryManFlag && ((mystery()[cardId >> 3] >> (cardId & 7)) & 1);
+}
+
+bool Gen4Save::deliveryManActive() const {
+    return (mystery()[kDeliveryManFlag >> 3] >> (kDeliveryManFlag & 7)) & 1;
+}
+
+bool Gen4Save::mysteryGiftUnlocked() const {
+    return general()[kUnlockOffset] & 1;
+}
+
+// Every gift points at its album card (PKHeX MysteryBlock4.UpdateSlotPGT):
+// HG/SS count the cards from 0 and use 3 for "none", D/P/Pt from 1 and 4.
+// D/P also mark each slot in use.
+void Gen4Save::linkGifts() {
+    uint8_t* block = mystery();
+    const bool hgss = isHgss();
+    for (int i = 0; i < kGiftPgts; ++i) {
+        uint8_t* pgt = block + pgtOffset(i);
+        if (readU16(pgt) == 0) {  // empty
+            pgt[kPgtSlot] = 0;
+            continue;
+        }
+        int card = kGiftCards;
+        for (int j = 0; j < kGiftCards; ++j) {
+            const uint8_t* pcd = block + pcdOffset(j);
+            if (!allZero(pcd, kPcdSize) && sameGift(pgt, pcd)) {
+                card = j;
+                break;
+            }
+        }
+        pgt[kPgtSlot] = static_cast<uint8_t>(hgss ? card : card + 1);
+    }
+    if (layout_->game == Game::DiamondPearl) {
+        uint8_t* sentinels = block + kGiftFlagsSize;
+        for (int i = 0; i < kDpSentinels; ++i) {
+            const bool used = i < kGiftPgts ? !allZero(block + pgtOffset(i), kPgtSize)
+                                            : !allZero(block + pcdOffset(i - kGiftPgts), kPcdSize);
+            writeU32(sentinels + i * 4, used ? kDpSlotActive : 0);
+        }
+    }
+}
+
+bool Gen4Save::addGift(const uint8_t* card, std::string* error) {
+    auto fail = [error](const char* reason) {
+        if (error) *error = reason;
+        return false;
+    };
+    const uint16_t type = readU16(card);
+    if (type == 0 || type > kGiftTypeMax) return fail("Not a Wonder Card");
+    uint8_t* block = mystery();
+    int slot = 0;
+    while (slot < kGiftCards && !allZero(block + pcdOffset(slot), kPcdSize)) ++slot;
+    if (slot == kGiftCards) return fail("The Mystery Gift album is full");
+    int gift = 0;
+    while (gift < kGiftPgts && !allZero(block + pgtOffset(gift), kPgtSize)) ++gift;
+    if (gift == kGiftPgts) return fail("The delivery man already holds 8 gifts");
+
+    uint8_t pcd[kPcdSize];
+    std::memcpy(pcd, card, kPcdSize);
+    if (type == kGiftPokemon || type == kGiftEgg) {
+        // The games keep the gift's Pokémon encrypted, as a box slot; files may hold it decrypted.
+        uint8_t* pk = pcd + 8;
+        const uint16_t species = readU16(pk + pk4::offset::kSpecies);
+        if (species >= 1 && species <= kMaxSpecies4 && pk4::calcChecksum(pk) == pk4::storedChecksum(pk)) {
+            pk4::encrypt(pk, pk4::kStoredSize);
+        }
+    }
+    std::memcpy(block + pcdOffset(slot), pcd, kPcdSize);
+    std::memcpy(block + pgtOffset(gift), pcd, kPgtSize);
+    // As when the game downloads a card: received flag, delivery man, menu option.
+    const uint16_t cardId = readU16(pcd + kPcdCardId);
+    if (cardId < kDeliveryManFlag) block[cardId >> 3] |= static_cast<uint8_t>(1 << (cardId & 7));
+    block[kDeliveryManFlag >> 3] |= static_cast<uint8_t>(1 << (kDeliveryManFlag & 7));
+    general()[kUnlockOffset] |= 1;
+    linkGifts();
+    return true;
+}
+
+bool Gen4Save::removeGift(int slot) {
+    if (slot < 0 || slot >= kGiftCards) return false;
+    uint8_t* block = mystery();
+    if (allZero(block + pcdOffset(slot), kPcdSize)) return false;
+    // A gift not handed out yet goes with its card.
+    const int gift = giftFor(slot);
+    if (gift >= 0) std::memset(block + pgtOffset(gift), 0, kPgtSize);
+    std::memmove(block + pcdOffset(slot), block + pcdOffset(slot + 1), (kGiftCards - slot - 1) * kPcdSize);
+    std::memset(block + pcdOffset(kGiftCards - 1), 0, kPcdSize);
+    linkGifts();
+    return true;
+}
+
 void Gen4Save::refreshChecksums() {
     refreshBlockChecksum(general(), layout_->generalSize, layout_->footerSize);
     refreshBlockChecksum(storage(), layout_->storageSize, layout_->footerSize);

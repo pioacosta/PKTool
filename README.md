@@ -93,6 +93,10 @@ searches the card for Pokémon `.sav` files, so keep your saves on the same card
   distribution period; Gen IV saves also offer the Pokémon Ranger Manaphy egg.
   Your own card files (`.pgt`, `.pcd`, `.pgf`) in `/PKTOOL/events/` are listed
   too.
+- **Mystery Gift (Gen IV/V):** like PKSM, put any of the 247 Gen IV or 700
+  Gen V Wonder Cards (or your own `.pcd` / `.pgf` files) in the save's Mystery
+  Gift album; after saving, the game's delivery man hands out the event
+  Pokémon.
 - **Gen III events:** 123 distributions for Gen III saves (Wishmaker, Channel
   and Tanabata Jirachi, Mew, the 10th Anniversary legendaries...), plus the
   54 event eggs (Pokémon Box, Pokémon Center Japan 5th Anniversary, Wish and
@@ -162,8 +166,8 @@ searches the card for Pokémon `.sav` files, so keep your saves on the same card
 ## How to use it
 
 Open a save from the main menu and the **save menu** appears, like the main
-menu of the game: *Boxes*, *Trainer*, *Bag*, *Bank*, *Save to SD*, *Backups*
-and *Close save* (the top screen shows the trainer card summary and the game's
+menu of the game: *Boxes*, *Trainer*, *Bag*, *Mystery Gift* (Gen IV/V), *Bank*,
+*Save to SD*, *Backups* and *Close save* (the top screen shows the trainer card summary and the game's
 legendary; "Unsaved" shows in the corner while there are changes not yet
 written). B inside Boxes, Trainer, Bag, Bank or Backups comes back to it; B on
 the menu closes the save. In the box view the top screen shows the selected
@@ -177,6 +181,7 @@ arrows, the box name, the keyboard and the button hints.
 | Settings | Up/Down: option (option lists, new level, names language, animations on/off, about) · Left/Right (or A): change · L/R: ±10 (level) or next language · A on About: version info · B: back (writes `settings.ini` if something changed) |
 | Save browser | A: open · X: backups of this save · Y: rescan · SELECT: back up the GBA cartridge (DS/DS Lite, beta) · B: back |
 | Save menu | Up/Down: choose (or tap a row) · A: open · SELECT: write the save · B: close the save (asks first if there are unsaved changes) |
+| Mystery Gift | Up/Down: card · A: add a Wonder Card (opens the list; A there adds it) · X: remove the card · SELECT: write the save · B: back |
 | Boxes | D-pad: move · L/R: party / boxes · A: slot menu (add on an empty slot) · Y: Bank · START: legality report · SELECT: write the save · tap the box name: rename it · B: back to the save menu |
 | Backups | Up/Down: choose · A: restore · X: back up now · B: back |
 | Trainer card | Up/Down: field · Left/Right: ±1 (money ±100, Gender: switch) · L/R: big step (±1000 IDs, ±10 000 money, ±10 time) · A: type the name / warn about IDs / toggle the selected badge · Y / X: money or badges maximum / minimum · tap a badge to toggle it · START: apply · B: back (asks if edited) |
@@ -235,6 +240,17 @@ Hoenn and Sinnoh contest sets; 17 in Gen III, whose five contest ribbons are ran
 checkbox or rank, a dot overview and the ribbon count on the top screen. Only the game's own limits apply, not
 PKHeX's ribbon legality. START applies the change to the Pokémon in memory (the checksum is refreshed and no other
 byte changes); eggs have no ribbons.
+
+**Mystery Gift (Gen IV/V).** The save menu's *Mystery Gift* row shows the album of Wonder Cards stored in the save
+(3 cards in Diamond to SoulSilver, 12 in Black to White 2) and whether the game already handed each one out. A opens the
+Wonder Card list (the compiled cards your game can receive and the `.pcd` / `.pgf` files of `/PKTOOL/events/`); A on a
+card puts it in the first free slot, as if it had been downloaded, and X removes the selected card (with its gift, if the
+game has not handed it out). Write the save with SELECT, then in the game talk to the delivery man (in green, by the Poké
+Mart counter; in Gen V, in any Pokémon Center): he gives the Pokémon, which the game itself creates. In Gen IV the card
+goes to the album and its gift to the delivery man, the delivery man is switched on and the Mystery Gift option of the
+main menu unlocked, as when the game downloads a card. The Ranger Manaphy egg is not a Wonder Card (*Add > Event* still
+creates it), and `.pgt` files have no card to store. The whole cards come from `events/pcd.bin` and `events/pgf.bin` in
+NitroFS.
 
 **Trainer card and bag.** Both are rows of the save menu. The *Trainer* screen shows the card on the top screen and lets
 you change the name, gender, Trainer ID / Secret ID, money, play time and badges

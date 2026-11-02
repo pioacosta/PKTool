@@ -95,6 +95,27 @@ public:
     bool writeBoxSlot(int box, int slot, const uint8_t* decrypted) override;
     bool clearBoxSlot(int box, int slot) override;
 
+    // Mystery Gift (PKHeX MysteryBlock4), in the general block: 0x100 bytes of
+    // received flags (one per card ID; 2047 = the delivery man is active), in
+    // D/P eleven "slot in use" words, then 8 gifts (PGT) for the delivery man
+    // and the album's 3 Wonder Cards (PCD, a PGT plus the card text). Each
+    // gift names the card it came from (its slot byte). addGift() takes a
+    // whole PCD: the card goes to the album and its gift to the delivery man.
+    static constexpr int kGiftCards = 3;
+    static constexpr int kGiftPgts = 8;
+    static constexpr size_t kPgtSize = 0x104;
+    static constexpr size_t kPcdSize = 0x358;
+    int giftSlotCount() const override { return kGiftCards; }
+    size_t giftCardSize() const override { return kPcdSize; }
+    bool readGift(int slot, uint8_t* card) const override;
+    bool giftWaiting(int slot) const override;
+    bool addGift(const uint8_t* card, std::string* error = nullptr) override;
+    bool removeGift(int slot) override;
+    bool giftReceived(uint16_t cardId) const;
+    bool deliveryManActive() const;
+    // The Mystery Gift option of the game's main menu.
+    bool mysteryGiftUnlocked() const;
+
     // Recomputes the CRC of both active blocks. Call before exporting data().
     void refreshChecksums() override;
     bool checksumsValid() const override;
@@ -110,6 +131,13 @@ private:
     size_t boxSlotOffset(int box, int slot) const;
     bool isHgss() const;
     uint8_t guessVersion() const;
+    // Mystery Gift block inside the general block, and its parts.
+    uint8_t* mystery();
+    const uint8_t* mystery() const;
+    size_t pgtOffset(int index) const;  // relative to mystery()
+    size_t pcdOffset(int index) const;
+    int giftFor(int card) const;        // delivery man slot holding the card's gift, -1 if none
+    void linkGifts();
 
     std::vector<uint8_t> data_;
     const Layout* layout_ = nullptr;
