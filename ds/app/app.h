@@ -104,7 +104,7 @@ public:
     void setAnimations(bool on) { settings_.animations = on; }
 
 private:
-    enum class Screen : uint8_t { Home, Browser, SaveMenu, Box, Edit, Backups, Picker, Bank, Keyboard, Trainer, Bag, ItemPicker, Ribbons, Settings };
+    enum class Screen : uint8_t { Home, Browser, SaveMenu, Box, Edit, Backups, Picker, Bank, Keyboard, Trainer, Bag, ItemPicker, Ribbons, Settings, Gifts };
     enum class KeyboardTarget : uint8_t { Nickname, BoxName, TrainerName, BankBoxName, BankSearch, OtName };
     // What the Bank screen shows on the bottom screen (bank_ui.cpp).
     enum class BankMode : uint8_t { Browse, Menu, SortKey, Filters, Results };
@@ -186,6 +186,16 @@ private:
     bool ribbonsChanged() const;
     void updateRibbons(const Input& in);
     void drawRibbons(gfx::Canvas& top, gfx::Canvas& bottom);
+    // Mystery Gift album of the save (gifts_ui.cpp): the cards the game's
+    // delivery man hands out. A opens the Wonder Card list to add one.
+    void openGifts();
+    void refreshGifts();
+    void updateGifts(const Input& in);
+    void drawGifts(gfx::Canvas& top, gfx::Canvas& bottom);
+    // Puts the Wonder Card of the selected Event picker row in the album.
+    void addGiftFromPicker();
+    // Where the NitroFS assets are looked for (Config::assetDirs, else dataDir).
+    std::vector<std::string> assetDirs() const;
     // Settings screen (settings_ui.cpp): preferences kept in <dataDir>/settings.ini.
     void openSettings();
     void applySettings();
@@ -404,6 +414,21 @@ private:
         int scroll = 0;
     };
     RibbonState rib_;
+
+    // Mystery Gift album, read when the screen opens and after every change.
+    struct GiftView {
+        std::vector<uint8_t> card;  // empty: free slot
+        std::string title;
+        bool pokemon = false;       // a Pokémon card (preview holds it)
+        bool pickedUp = false;      // the delivery man already handed it out
+        pokemon::Pokemon preview;
+    };
+    std::vector<GiftView> gifts_;
+    std::vector<std::string> giftRows_;
+    std::vector<std::string> giftEmpty_;  // drawList dimming: non-empty for free slots
+    int giftCursor_ = 0;
+    int giftScroll_ = 0;
+    bool giftPicking_ = false;  // the Event picker adds to the album instead of a box slot
 
     std::vector<TouchZone> zones_;  // touch targets from the last draw
 };

@@ -170,6 +170,26 @@ protected:
     bool validateTrainer(const TrainerData& trainer, std::string* error) const;
 
 public:
+    // Mystery Gift album: the Wonder Cards stored in the save, which the game's
+    // delivery man hands out (Gen IV: 3 PCD cards, Gen V: 12 PGF cards). Saves
+    // without one report 0 slots. Cards are exchanged as the card files are
+    // (giftCardSize() bytes, a Gen IV card's Pokémon encrypted).
+    virtual int giftSlotCount() const { return 0; }
+    virtual size_t giftCardSize() const { return 0; }
+    // Copies the card of a slot; false if the slot is empty or out of range.
+    virtual bool readGift(int, uint8_t*) const { return false; }
+    // Whether the delivery man still has the gift of a card to hand out.
+    virtual bool giftWaiting(int) const { return false; }
+    // Puts a card in the first empty slot, ready to be picked up, and marks its
+    // card ID as received (as the game does). On failure (album full, not a
+    // card) returns false with a reason in `error` and changes nothing.
+    virtual bool addGift(const uint8_t*, std::string* error = nullptr) {
+        if (error) *error = "This game has no Mystery Gift album";
+        return false;
+    }
+    // Removes the card of a slot; the following cards move up, as in the game.
+    virtual bool removeGift(int) { return false; }
+
     // Recomputes every checksum. Call before exporting data().
     virtual void refreshChecksums() = 0;
     virtual bool checksumsValid() const = 0;

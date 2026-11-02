@@ -7,6 +7,7 @@ The generated files keep that attribution in their headers.
 Usage:
     python3 tools/gen_data.py --pkhex /path/to/PKHeX/PKHeX.Core
     python3 tools/gen_data.py --pkhex /path/to/PKHeX/PKHeX.Core --only events   # the Wonder Cards (needs tools/event_dates.csv)
+    python3 tools/gen_data.py --pkhex /path/to/PKHeX/PKHeX.Core --only cards    # whole Gen IV/V cards in assets/nitrofs/events (Mystery Gift)
     python3 tools/gen_data.py --pkhex /path/to/PKHeX/PKHeX.Core --only events3  # Gen III events, Colosseum/XD
     python3 tools/gen_data.py --pkhex /path/to/PKHeX/PKHeX.Core --only locks3   # Colosseum/XD shadow locks, Poke Spots
     python3 tools/gen_data.py --pkhex /path/to/PKHeX/PKHeX.Core --only langs    # name packs in assets/nitrofs/lang
@@ -1122,6 +1123,49 @@ def gen_events5(core: Path, out: Path, species_names: list[str]) -> None:
     (out / "events5_data.cpp").write_text(content, encoding="ascii")
     dated = sum(1 for c in cards if c[8])
     print(f"events5: {len(cards)} Pokemon cards, {dated} with distribution periods")
+
+
+def gen_cards5(core: Path, assets: Path) -> None:
+    """Whole Gen V Pokemon Wonder Cards, for the Mystery Gift album of a save.
+
+    The compiled table (events5_data.cpp) keeps only the Pokemon part of each
+    card; injecting a card needs all of it. File "PKG5": magic, u16 card count,
+    u16 card size (0xCC), then the cards as PKHeX stores them. The DS finds a
+    table card's bytes by its Pokemon part and card ID, so the order is free."""
+    data = (core / "Resources" / "legality" / "mgdb" / "pgf.pkl").read_bytes()
+    count = len(data) // (PGF_SIZE + 1)
+    cards = [data[i * PGF_SIZE:(i + 1) * PGF_SIZE] for i in range(count)]
+    cards = [card for card in cards if card[0xB3] == 1]  # Pokemon cards, as in the table
+    out_dir = assets / "events"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    blob = b"PKG5" + struct.pack("<HH", len(cards), PGF_SIZE) + b"".join(cards)
+    (out_dir / "pgf.bin").write_bytes(blob)
+    print(f"cards5: {len(cards)} whole Pokemon cards ({len(blob)} bytes)")
+
+
+def gen_cards4(core: Path, assets: Path) -> None:
+    """Whole Gen IV Pokemon Wonder Cards (PCD), for the Mystery Gift album of a save.
+
+    File "PKG4", laid out like "PKG5" with 0x358-byte cards: the Pokemon cards of
+    the compiled table (events4_data.cpp), their PK4 decrypted so the DS finds
+    them by template and card ID. The save encrypts the PK4 when it stores a card."""
+    data = (core / "Resources" / "legality" / "mgdb" / "wc4.pkl").read_bytes()
+    cards = []
+    for i in range(len(data) // PCD_SIZE):
+        card = bytearray(data[i * PCD_SIZE:(i + 1) * PCD_SIZE])
+        if card[0] != 1:  # 1 = Pokemon gift, as in the table
+            continue
+        template = bytes(card[8:8 + 136])
+        species = struct.unpack_from("<H", template, 8)[0]
+        if pk4_checksum(template) != struct.unpack_from("<H", template, 6)[0] or not 0 < species <= MAX_SPECIES_G4:
+            template = pk4_decrypt(template)
+        card[8:8 + 136] = template
+        cards.append(bytes(card))
+    out_dir = assets / "events"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    blob = b"PKG4" + struct.pack("<HH", len(cards), PCD_SIZE) + b"".join(cards)
+    (out_dir / "pcd.bin").write_bytes(blob)
+    print(f"cards4: {len(cards)} whole cards ({len(blob)} bytes)")
 
 
 PERSONAL3_SIZE = 0x1C
@@ -2369,7 +2413,7 @@ def main() -> None:
         default=Path(__file__).resolve().parent.parent / "assets" / "nitrofs",
         help="NitroFS asset directory (language packs go to <assets>/lang)",
     )
-    parser.add_argument("--only", choices=["langs", "learn", "charmap", "events", "events5", "events3", "eggs3", "gen3", "items", "dreamworld5", "walker", "locks3", "gen12", "trades345"], help="regenerate only this table")
+    parser.add_argument("--only", choices=["langs", "learn", "charmap", "events", "events5", "cards", "events3", "eggs3", "gen3", "items", "dreamworld5", "walker", "locks3", "gen12", "trades345"], help="regenerate only this table")
     args = parser.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -2377,6 +2421,12 @@ def main() -> None:
         if args.only == "events":
             gen_events4(args.pkhex, args.out, species_names_en(args.pkhex))
         gen_events5(args.pkhex, args.out, species_names_en(args.pkhex))
+        gen_cards4(args.pkhex, args.assets)
+        gen_cards5(args.pkhex, args.assets)
+        return
+    if args.only == "cards":
+        gen_cards4(args.pkhex, args.assets)
+        gen_cards5(args.pkhex, args.assets)
         return
     if args.only == "charmap":
         gen_charmap4(args.pkhex, args.out)
@@ -2433,6 +2483,8 @@ def main() -> None:
     gen_charmap4(args.pkhex, args.out)
     gen_events4(args.pkhex, args.out, species_names_en(args.pkhex))
     gen_events5(args.pkhex, args.out, species_names_en(args.pkhex))
+    gen_cards4(args.pkhex, args.assets)
+    gen_cards5(args.pkhex, args.assets)
     gen_trades345(args.pkhex, args.out)
     gen_events3(args.pkhex, args.out, species_names_en(args.pkhex))
     gen_locks3(args.pkhex, args.out)

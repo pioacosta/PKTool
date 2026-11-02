@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 #include "core/data/event_period.h"
 
@@ -60,6 +63,13 @@ bool canReceiveEvent5(const Event5& card, uint8_t gameVersion);
 
 // The card's distribution periods (none when unknown).
 EventPeriods eventPeriods(const Event5& card);
+
+// Whole cards (PGF), for the Mystery Gift album of a save, from the "PKG5"
+// pack (see core/data/card_pack.h) in events/pgf.bin of the assets. Found by
+// Pokémon part and card ID; false without a pack or card.
+constexpr size_t kWholePgfSize = 0xCC;
+const char* const kCardPack5 = "events/pgf.bin";
+bool findWholeCard5(const Event5& card, const std::vector<std::string>& dirs, uint8_t out[kWholePgfSize]);
 
 namespace generated {
 extern const Event5 kEvents5[];

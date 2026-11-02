@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "core/data/events4.h"
 #include "core/data/events5.h"
@@ -46,6 +47,9 @@ struct Card {
     // a table card borrows its distribution periods (and so passes the same
     // met-date check); any other card has none and is dated "today".
     int tableIndex = -1;
+    // The whole file when it is a card (.pcd or .pgf, Ok or NotPokemon): what
+    // goes into a save's Mystery Gift album. Empty for .pgt files (no card).
+    std::vector<uint8_t> whole;
 
     Card() = default;
     Card(const Card&) = delete;
@@ -56,5 +60,9 @@ struct Card {
 // and `fileName` only names the card. Never returns null.
 std::unique_ptr<Card> parse(const uint8_t* bytes, size_t size, const std::string& extension,
                             const std::string& fileName);
+
+// Title of a whole card (PCD, 0x358 bytes, or PGF, 0xCC bytes) as the DS fonts
+// can show it, `fallback` when it has none or uses other scripts.
+std::string cardTitle(const uint8_t* card, size_t size, const std::string& fallback);
 
 }  // namespace pktool::pokemon::cardfile

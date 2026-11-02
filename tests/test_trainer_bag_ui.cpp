@@ -83,12 +83,21 @@ void writeSave(ui::App& app) {
     press(app, ui::kKeyA);
 }
 
+// Centre of a save menu row: Boxes, Trainer, Bag, Bank, Save to SD, Backups, Close save. Rows
+// are 22 px apart from y = 6; saves with a Mystery Gift album (Gen V) have it after Bag, and
+// their eight rows are 20 px apart.
+int saveMenuRowY(int row, bool album) {
+    if (album && row >= 3) ++row;
+    const int pitch = album ? 20 : 22;
+    return 6 + row * pitch + pitch / 2;
+}
+
 // Opens an entry of the save menu by tapping its row (the cursor position does not matter):
-// 0 = Trainer, 1 = Bag, 2 = Backups. Rows are 22 px apart from y = 6, Boxes being the first row.
-void openFromSaveMenu(ui::App& app, int entry) {
+// 0 = Trainer, 1 = Bag, 2 = Backups.
+void openFromSaveMenu(ui::App& app, int entry, bool album = false) {
     draw(app);
     const int rows[] = {1, 2, 5};
-    tap(app, 120, 6 + rows[entry] * 22 + 10);
+    tap(app, 120, saveMenuRowY(rows[entry], album));
 }
 
 // Keyboard keys by touch (see drawKeyboard): character key (row, col) and the special keys.
@@ -401,7 +410,7 @@ TEST(ui_backups_screen_offers_a_manual_backup) {
     Fixture f = makeFixture(fake::blankGen5(false));
     ui::App app(f.config);
     CHECK(app.openSave(f.path));
-    openFromSaveMenu(app, 2);  // Backups
+    openFromSaveMenu(app, 2, true);  // Backups
     press(app, ui::kKeyX);     // Back up now
     press(app, ui::kKeyA);     // close the message
     CHECK(!io::listBackups(f.path, io::joinPath(f.config.dataDir, "backups")).empty());
@@ -413,10 +422,10 @@ namespace {
 
 std::string where(const ui::App& app) { return app.screenName(); }
 
-// Save menu rows: Boxes, Trainer, Bag, Bank, Save to SD, Backups, Close save.
-void tapSaveMenuRow(ui::App& app, int row) {
+// Save menu rows: Boxes, Trainer, Bag, Bank, Save to SD, Backups, Close save (see saveMenuRowY).
+void tapSaveMenuRow(ui::App& app, int row, bool album = false) {
     draw(app);
-    tap(app, 120, 6 + row * 22 + 10);
+    tap(app, 120, saveMenuRowY(row, album));
 }
 
 }  // namespace
@@ -458,6 +467,14 @@ TEST(ui_save_menu_opens_each_screen_and_b_comes_back) {
         press(app, ui::kKeyB);
         CHECK(where(app) == "SaveMenu");
 
+        if (saves::loadSaveFile(v.data)->giftSlotCount() > 0) {
+            press(app, ui::kKeyDown);  // Mystery Gift (Gen V)
+            press(app, ui::kKeyA);
+            CHECK(where(app) == "Gifts");
+            press(app, ui::kKeyB);
+            CHECK(where(app) == "SaveMenu");
+        }
+
         press(app, ui::kKeyDown);  // Bank
         press(app, ui::kKeyA);
         CHECK(where(app) == "Bank");
@@ -472,10 +489,11 @@ TEST(ui_save_menu_opens_each_screen_and_b_comes_back) {
         CHECK(where(app) == "SaveMenu");
 
         // Touch works on the rows as well.
-        tapSaveMenuRow(app, 2);
+        const bool album = saves::loadSaveFile(v.data)->giftSlotCount() > 0;
+        tapSaveMenuRow(app, 2, album);
         CHECK(where(app) == "Bag");
         press(app, ui::kKeyB);
-        tapSaveMenuRow(app, 0);
+        tapSaveMenuRow(app, 0, album);
         CHECK(where(app) == "Box");
         press(app, ui::kKeyY);  // the box view's own Bank shortcut still returns to the box view
         CHECK(where(app) == "Bank");
@@ -501,7 +519,7 @@ TEST(ui_save_menu_close_asks_only_with_unsaved_changes) {
     CHECK(where(app) == "SaveMenu");
     press(app, ui::kKeyB);  // No
     CHECK(where(app) == "SaveMenu");
-    tapSaveMenuRow(app, 6);  // Close save: asks as well
+    tapSaveMenuRow(app, 6, true);  // Close save: asks as well
     press(app, ui::kKeyA);   // Yes
     CHECK(where(app) == "Browser");
     std::vector<uint8_t> onDisk;
@@ -514,7 +532,7 @@ TEST(ui_save_menu_save_to_sd_uses_the_confirmed_write) {
     ui::App app(f.config);
     CHECK(app.openSave(f.path));
 
-    tapSaveMenuRow(app, 4);  // Save to SD without changes
+    tapSaveMenuRow(app, 4, true);  // Save to SD without changes
     press(app, ui::kKeyA);   // "Nothing to save"
     CHECK(where(app) == "SaveMenu");
     std::vector<uint8_t> onDisk;
@@ -527,7 +545,7 @@ TEST(ui_save_menu_save_to_sd_uses_the_confirmed_write) {
     press(app, ui::kKeyStart);
     CHECK(where(app) == "SaveMenu");
 
-    tapSaveMenuRow(app, 4);  // confirm dialog
+    tapSaveMenuRow(app, 4, true);  // confirm dialog
     press(app, ui::kKeyB);   // No: nothing is written
     CHECK(io::readFile(f.path, onDisk));
     CHECK(onDisk == f.original);
